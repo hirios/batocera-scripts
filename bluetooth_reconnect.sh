@@ -2,16 +2,16 @@
 
 RETRY_INTERVAL=7
 
-# Função para reiniciar o serviço Bluetooth no Batocera
+# Function to restart the Bluetooth service in Batocera
 function restart_bluetooth_service() {
-  echo "$(date): Reiniciando Bluetooth via batocera-bluetooth..."
+  echo "$(date): Restarting Bluetooth via batocera-bluetooth..."
   /usr/bin/batocera-bluetooth disable
   sleep 2
   /usr/bin/batocera-bluetooth enable
   sleep 5
 }
 
-# Pega o endereço do adaptador Bluetooth ativo
+# Get the address of the active Bluetooth adapter
 ADAPTER=$(hciconfig | awk '
   BEGIN {bd_address=""}
   /^hci[0-9]+:/ {adapter=$1; bd_address=""}
@@ -20,44 +20,44 @@ ADAPTER=$(hciconfig | awk '
 ')
 
 if [ -z "$ADAPTER" ]; then
-  echo "Nenhum adaptador Bluetooth ativo encontrado."
+  echo "No active Bluetooth adapter found."
   exit 1
 fi
 
-echo "Adaptador Bluetooth ativo: $ADAPTER"
+echo "Active Bluetooth adapter: $ADAPTER"
 
 while true; do
-  # Lista dispositivos pareados (pastas dentro do adaptador)
+  # List paired devices (folders inside the adapter directory)
   PAIRED_DEVICES=$(ls -d /var/lib/bluetooth/"$ADAPTER"/[0-9A-F][0-9A-F]:[0-9A-F][0-9A-F]:[0-9A-F][0-9A-F]:[0-9A-F][0-9A-F]:[0-9A-F][0-9A-F]:[0-9A-F][0-9A-F] 2>/dev/null | xargs -n1 basename)
 
   if [ -z "$PAIRED_DEVICES" ]; then
-    echo "Nenhum dispositivo pareado encontrado."
+    echo "No paired devices found."
   fi
 
-  echo "Ligando scan..."
+  echo "Enabling scan..."
   timeout 5 bluetoothctl scan on
   if [ $? -ne 0 ]; then
-    echo "$(date): Timeout ou falha ao ligar scan"
+    echo "$(date): Timeout or failed to enable scan."
     restart_bluetooth_service
     continue
   fi
 
   sleep 5
 
-  bluetoothctl scan off || echo "Falha ao parar scan, pode ser ignorado."
+  bluetoothctl scan off || echo "Failed to stop scan, this can be ignored."
 
-  # Lista dispositivos visíveis no momento
+  # List currently visible devices
   VISIBLE_DEVICES=$(bluetoothctl devices | awk '{print $2}')
 
   for MAC in $PAIRED_DEVICES; do
     if echo "$VISIBLE_DEVICES" | grep -Fxq "$MAC"; then
-      echo "$(date): Tentando reconectar $MAC ..."
+      echo "$(date): Attempting to reconnect $MAC..."
       bluetoothctl connect "$MAC"
     else
-      echo "$(date): Dispositivo $MAC não está visível, pulando."
+      echo "$(date): Device $MAC is not visible, skipping."
     fi
   done
 
-  echo "Aguardando $RETRY_INTERVAL segundos para próxima tentativa..."
+  echo "Waiting $RETRY_INTERVAL seconds before next attempt..."
   sleep $RETRY_INTERVAL
 done
